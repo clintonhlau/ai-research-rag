@@ -72,7 +72,9 @@ def _parse_tei_sections(tei_xml: str, sections_to_extract: list[str]) -> dict[st
     if "abstract" in sections_to_extract:
         abstract_elem = root.find(".//tei:abstract", ns)
         if abstract_elem is not None:
-            sections["abstract"] = " ".join(abstract_elem.itertext()).strip()
+            sections["abstract"] = " ".join(
+                t.strip() for t in abstract_elem.itertext() if t.strip()
+            )
 
     for div in root.findall(".//tei:body//tei:div", ns):
         head = div.find("tei:head", ns)
@@ -84,8 +86,10 @@ def _parse_tei_sections(tei_xml: str, sections_to_extract: list[str]) -> dict[st
                 continue
             if section.lower() in heading_lower and not sections[section]:
                 sections[section] = " ".join(
-                    p.text or "" for p in div.findall("tei:p", ns) if p.text
-                ).strip()
+                    " ".join(p.itertext()).strip()
+                    for p in div.findall("tei:p", ns)
+                    if "".join(p.itertext()).strip()
+                )
 
     return sections
 
