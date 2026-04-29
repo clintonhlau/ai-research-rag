@@ -109,7 +109,26 @@ def extract_sections(pdf_path: Path, sections_to_extract: list[str]) -> dict[str
 def store_paper(
     conn: sqlite3.Connection, paper, sections: dict[str, str]
 ) -> bool:
-    raise NotImplementedError
+    paper_id = paper.get_short_id()
+    if conn.execute("SELECT 1 FROM papers WHERE paper_id = ?", (paper_id,)).fetchone():
+        return False
+    conn.execute(
+        """INSERT INTO papers
+           (paper_id, title, authors, pdf_url, categories, published_date, sections, fetched_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            paper_id,
+            paper.title,
+            ", ".join(a.name for a in paper.authors),
+            paper.pdf_url,
+            ", ".join(paper.categories),
+            paper.published.isoformat(),
+            json.dumps(sections),
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    conn.commit()
+    return True
 
 
 def run_ingestion() -> None:

@@ -264,3 +264,80 @@ def test_extract_sections_posts_to_correct_grobid_endpoint(mock_post, tmp_path):
 
     call_url = mock_post.call_args.args[0]
     assert "/api/processFulltextDocument" in call_url
+
+
+# ── store_paper ──────────────────────────────────────────────────────────────
+
+def _make_full_paper(short_id: str = "2301.07041v1"):
+    paper = MagicMock()
+    paper.get_short_id.return_value = short_id
+    paper.title = "Test Paper on AI Safety"
+    author_a, author_b = MagicMock(), MagicMock()
+    author_a.name = "Alice Smith"
+    author_b.name = "Bob Jones"
+    paper.authors = [author_a, author_b]
+    paper.pdf_url = "https://arxiv.org/pdf/2301.07041"
+    paper.categories = ["cs.AI", "cs.LG"]
+    paper.published = datetime(2024, 1, 15, tzinfo=timezone.utc)
+    return paper
+
+
+_SECTIONS = {
+    "abstract": "We study safety",
+    "introduction": "Intro text",
+    "results": "Results here",
+    "conclusion": "Conclusions here",
+}
+
+
+def test_store_paper_inserts_new_paper(tmp_path):
+    conn = init_db(str(tmp_path / "test.db"))
+    paper = _make_full_paper()
+
+    inserted = store_paper(conn, paper, _SECTIONS)
+
+    assert inserted is True
+    row = conn.execute(
+        "SELECT paper_id FROM papers WHERE paper_id = '2301.07041v1'"
+    ).fetchone()
+    assert row is not None
+
+
+def test_store_paper_sections_stored_as_valid_json(tmp_path):
+    conn = init_db(str(tmp_path / "test.db"))
+    paper = _make_full_paper()
+
+    store_paper(conn, paper, _SECTIONS)
+
+    row = conn.execute(
+        "SELECT sections FROM papers WHERE paper_id = '2301.07041v1'"
+    ).fetchone()
+    parsed = json.loads(row[0])
+    assert parsed["abstract"] == "We study safety"
+    assert parsed["introduction"] == "Intro text"
+
+
+def test_store_paper_skips_duplicate_and_returns_false(tmp_path):
+    conn = init_db(str(tmp_path / "test.db"))
+    paper = _make_full_paper()
+
+    store_paper(conn, paper, _SECTIONS)
+    second = store_paper(conn, paper, _SECTIONS)
+
+    assert second is False
+    count = conn.execute(
+        "SELECT COUNT(*) FROM papers WHERE paper_id = '2301.07041v1'"
+    ).fetchone()[0]
+    assert count == 1
+
+
+def test_store_paper_authors_stored_as_comma_separated(tmp_path):
+    conn = init_db(str(tmp_path / "test.db"))
+    paper = _make_full_paper()
+
+    store_paper(conn, paper, _SECTIONS)
+
+    row = conn.execute(
+        "SELECT authors FROM papers WHERE paper_id = '2301.07041v1'"
+    ).fetchone()
+    assert row[0] == "Alice Smith, Bob Jones"
