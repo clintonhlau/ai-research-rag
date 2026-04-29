@@ -132,3 +132,36 @@ def test_fetch_returns_empty_list_when_no_results(mock_search_cls, mock_client_c
     mock_client.results.return_value = iter([])
 
     assert fetch_papers_by_category("cs.AI", months_back=12) == []
+
+
+# ── download_pdf ─────────────────────────────────────────────────────────────
+
+def _make_arxiv_paper(short_id: str = "2301.07041v1"):
+    paper = MagicMock()
+    paper.get_short_id.return_value = short_id
+    return paper
+
+
+def test_download_pdf_calls_download_and_returns_path(tmp_path):
+    paper = _make_arxiv_paper("2301.07041v1")
+
+    def fake_download(dirpath, filename):
+        (Path(dirpath) / filename).touch()
+
+    paper.download_pdf.side_effect = fake_download
+
+    result = download_pdf(paper, tmp_path)
+
+    assert result == tmp_path / "2301.07041v1.pdf"
+    assert result.exists()
+
+
+def test_download_pdf_skips_if_file_already_exists(tmp_path):
+    paper = _make_arxiv_paper("2301.07041v1")
+    existing = tmp_path / "2301.07041v1.pdf"
+    existing.touch()
+
+    result = download_pdf(paper, tmp_path)
+
+    paper.download_pdf.assert_not_called()
+    assert result == existing

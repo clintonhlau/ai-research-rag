@@ -57,7 +57,12 @@ def fetch_papers_by_category(category: str, months_back: int) -> list:
 
 
 def download_pdf(paper, pdfs_dir: Path) -> Path:
-    raise NotImplementedError
+    paper_id = paper.get_short_id()
+    pdf_path = pdfs_dir / f"{paper_id}.pdf"
+    if pdf_path.exists():
+        return pdf_path
+    paper.download_pdf(dirpath=str(pdfs_dir), filename=f"{paper_id}.pdf")
+    return pdf_path
 
 
 def extract_sections(pdf_path: Path, sections_to_extract: list[str]) -> dict[str, str]:
