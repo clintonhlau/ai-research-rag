@@ -84,3 +84,51 @@ def test_filter_partial_match_across_multiple_papers():
 
 def test_filter_returns_empty_list_for_empty_input():
     assert filter_by_keywords([], ["alignment"]) == []
+
+
+# ── fetch_papers_by_category ─────────────────────────────────────────────────
+
+def _make_arxiv_result(days_ago: int):
+    result = MagicMock()
+    result.published = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    result.title = "Test Paper"
+    result.summary = "Test abstract"
+    return result
+
+
+@patch("ingestion.fetch_papers.arxiv.Client")
+@patch("ingestion.fetch_papers.arxiv.Search")
+def test_fetch_returns_recent_papers_and_stops_at_cutoff(mock_search_cls, mock_client_cls):
+    recent = _make_arxiv_result(days_ago=30)
+    old = _make_arxiv_result(days_ago=400)
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.results.return_value = iter([recent, old])
+
+    results = fetch_papers_by_category("cs.AI", months_back=12)
+
+    assert recent in results
+    assert old not in results
+
+
+@patch("ingestion.fetch_papers.arxiv.Client")
+@patch("ingestion.fetch_papers.arxiv.Search")
+def test_fetch_passes_correct_category_to_search(mock_search_cls, mock_client_cls):
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.results.return_value = iter([])
+
+    fetch_papers_by_category("cs.LG", months_back=12)
+
+    call_kwargs = mock_search_cls.call_args.kwargs
+    assert "cs.LG" in call_kwargs["query"]
+
+
+@patch("ingestion.fetch_papers.arxiv.Client")
+@patch("ingestion.fetch_papers.arxiv.Search")
+def test_fetch_returns_empty_list_when_no_results(mock_search_cls, mock_client_cls):
+    mock_client = MagicMock()
+    mock_client_cls.return_value = mock_client
+    mock_client.results.return_value = iter([])
+
+    assert fetch_papers_by_category("cs.AI", months_back=12) == []

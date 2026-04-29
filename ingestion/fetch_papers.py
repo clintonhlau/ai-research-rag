@@ -40,7 +40,20 @@ def filter_by_keywords(papers: list, keywords: list[str]) -> list:
 
 
 def fetch_papers_by_category(category: str, months_back: int) -> list:
-    raise NotImplementedError
+    cutoff = datetime.now(timezone.utc) - timedelta(days=months_back * 30)
+    client = arxiv.Client()
+    search = arxiv.Search(
+        query=f"cat:{category}",
+        max_results=float("inf"),
+        sort_by=arxiv.SortCriterion.SubmittedDate,
+        sort_order=arxiv.SortOrder.Descending,
+    )
+    results = []
+    for paper in client.results(search):
+        if paper.published < cutoff:
+            break
+        results.append(paper)
+    return results
 
 
 def download_pdf(paper, pdfs_dir: Path) -> Path:
