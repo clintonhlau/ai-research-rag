@@ -341,3 +341,58 @@ def test_store_paper_authors_stored_as_comma_separated(tmp_path):
         "SELECT authors FROM papers WHERE paper_id = '2301.07041v1'"
     ).fetchone()
     assert row[0] == "Alice Smith, Bob Jones"
+
+
+# ── run_ingestion ────────────────────────────────────────────────────────────
+
+import config as _config
+
+
+@patch("ingestion.fetch_papers.time.sleep")
+@patch("ingestion.fetch_papers.store_paper")
+@patch("ingestion.fetch_papers.extract_sections")
+@patch("ingestion.fetch_papers.download_pdf")
+@patch("ingestion.fetch_papers.filter_by_keywords")
+@patch("ingestion.fetch_papers.fetch_papers_by_category")
+@patch("ingestion.fetch_papers.init_db")
+def test_run_ingestion_fetches_one_per_category(
+    mock_init_db, mock_fetch, mock_filter, mock_download,
+    mock_extract, mock_store, mock_sleep,
+):
+    mock_conn = MagicMock()
+    mock_init_db.return_value = mock_conn
+    mock_paper = MagicMock()
+    mock_fetch.return_value = [mock_paper]
+    mock_filter.return_value = [mock_paper]
+    mock_download.return_value = Path("data/pdfs/test.pdf")
+    mock_extract.return_value = {
+        "abstract": "x", "introduction": "x", "results": "x", "conclusion": "x"
+    }
+    mock_store.return_value = True
+
+    run_ingestion()
+
+    assert mock_fetch.call_count == len(_config.ARXIV_CATEGORIES)
+
+
+@patch("ingestion.fetch_papers.time.sleep")
+@patch("ingestion.fetch_papers.store_paper")
+@patch("ingestion.fetch_papers.extract_sections")
+@patch("ingestion.fetch_papers.download_pdf")
+@patch("ingestion.fetch_papers.filter_by_keywords")
+@patch("ingestion.fetch_papers.fetch_papers_by_category")
+@patch("ingestion.fetch_papers.init_db")
+def test_run_ingestion_skips_paper_on_pdf_error(
+    mock_init_db, mock_fetch, mock_filter, mock_download,
+    mock_extract, mock_store, mock_sleep,
+):
+    mock_conn = MagicMock()
+    mock_init_db.return_value = mock_conn
+    mock_paper = MagicMock()
+    mock_fetch.return_value = [mock_paper]
+    mock_filter.return_value = [mock_paper]
+    mock_download.side_effect = Exception("Network error")
+
+    run_ingestion()  # must not raise
+
+    mock_store.assert_not_called()

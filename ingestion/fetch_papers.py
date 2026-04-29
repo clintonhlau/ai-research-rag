@@ -132,7 +132,30 @@ def store_paper(
 
 
 def run_ingestion() -> None:
-    raise NotImplementedError
+    pdfs_dir = Path("data/pdfs")
+    pdfs_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = init_db(config.DB_PATH)
+    total_new = 0
+
+    for category in config.ARXIV_CATEGORIES:
+        print(f"Fetching {category}...")
+        papers = fetch_papers_by_category(category, config.ARXIV_MONTHS_BACK)
+        filtered = filter_by_keywords(papers, config.ARXIV_SAFETY_KEYWORDS)
+        print(f"  {len(papers)} fetched, {len(filtered)} matched keywords")
+
+        for paper in filtered:
+            try:
+                pdf_path = download_pdf(paper, pdfs_dir)
+                sections = extract_sections(pdf_path, config.SECTIONS_TO_EXTRACT)
+                if store_paper(conn, paper, sections):
+                    total_new += 1
+            except Exception as e:
+                print(f"  Skipping {paper.get_short_id()}: {e}")
+            time.sleep(config.ARXIV_RATE_LIMIT_SLEEP)
+
+    conn.close()
+    print(f"Done. {total_new} new papers added.")
 
 
 if __name__ == "__main__":
