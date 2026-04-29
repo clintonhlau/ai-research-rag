@@ -38,20 +38,50 @@ def filter_by_keywords(papers: list, keywords: list[str]) -> list:
     return [p for p in papers if matches(p)]
 
 
-def fetch_papers_by_category(category: str, months_back: int) -> list:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=months_back * 30)
-    client = arxiv.Client()
+_PAGE_SIZE = 100
+
+
+def _fetch_page_with_backoff(category: str, offset: int) -> list:
+    """Fetch one page of results at `offset`, retrying with exponential backoff on 429."""
     search = arxiv.Search(
         query=f"cat:{category}",
-        max_results=None,
+        max_results=offset + _PAGE_SIZE,
         sort_by=arxiv.SortCriterion.SubmittedDate,
         sort_order=arxiv.SortOrder.Descending,
     )
+    # delay_seconds=0: we own the inter-page sleep in fetch_papers_by_category
+    client = arxiv.Client(page_size=_PAGE_SIZE, delay_seconds=0, num_retries=1)
+    for attempt in range(config.ARXIV_NUM_RETRIES):
+        try:
+            return list(client.results(search, offset=offset))
+        except arxiv.HTTPError as e:
+            if e.status == 429 and attempt < config.ARXIV_NUM_RETRIES - 1:
+                wait = config.ARXIV_RATE_LIMIT_SLEEP * (config.ARXIV_BACKOFF_BASE ** attempt)
+                print(f"  429 at offset {offset}, retrying in {wait}s (attempt {attempt + 1})")
+                time.sleep(wait)
+            else:
+                raise
+    return []  # unreachable
+
+
+def fetch_papers_by_category(category: str, months_back: int) -> list:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=months_back * 30)
     results = []
-    for paper in client.results(search):
-        if paper.published < cutoff:
-            break  # safe: results are sorted newest-first
-        results.append(paper)
+    offset = 0
+
+    while True:
+        page = _fetch_page_with_backoff(category, offset)
+        if not page:
+            break
+        for paper in page:
+            if paper.published < cutoff:
+                return results  # sorted newest-first, so we're done
+            results.append(paper)
+        if len(page) < _PAGE_SIZE:
+            break  # last page
+        offset += _PAGE_SIZE
+        time.sleep(config.ARXIV_RATE_LIMIT_SLEEP)
+
     return results
 
 

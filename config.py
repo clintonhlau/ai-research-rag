@@ -36,7 +36,9 @@ ARXIV_SAFETY_KEYWORDS = [
     "existential risk", "AI governance", "AI risk"
 ]
 ARXIV_MONTHS_BACK = 12
-ARXIV_RATE_LIMIT_SLEEP = 3            # seconds between batches
+ARXIV_RATE_LIMIT_SLEEP = 5            # seconds between ArXiv API page requests
+ARXIV_NUM_RETRIES = 5                 # retries per page on 429
+ARXIV_BACKOFF_BASE = 2                # exponential backoff multiplier on 429
 SECTIONS_TO_EXTRACT = ["abstract", "introduction", "results", "conclusion"]
 
 # --- GROBID ---
