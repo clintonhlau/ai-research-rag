@@ -30,7 +30,13 @@ def init_db(db_path: str) -> sqlite3.Connection:
 
 
 def filter_by_keywords(papers: list, keywords: list[str]) -> list:
-    raise NotImplementedError
+    keywords_lower = [kw.lower() for kw in keywords]
+
+    def matches(paper) -> bool:
+        text = (paper.title + " " + paper.summary).lower()
+        return any(kw in text for kw in keywords_lower)
+
+    return [p for p in papers if matches(p)]
 
 
 def fetch_papers_by_category(category: str, months_back: int) -> list:

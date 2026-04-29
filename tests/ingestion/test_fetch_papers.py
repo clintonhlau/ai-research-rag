@@ -43,3 +43,44 @@ def test_init_db_is_idempotent(tmp_path):
     conn.close()
     conn2 = init_db(db_path)  # must not raise on second call
     conn2.close()
+
+
+# ── filter_by_keywords ───────────────────────────────────────────────────────
+
+def _make_paper(title: str, summary: str):
+    paper = MagicMock()
+    paper.title = title
+    paper.summary = summary
+    return paper
+
+
+def test_filter_matches_keyword_in_title():
+    papers = [_make_paper("AI Safety in LLMs", "Something else")]
+    assert len(filter_by_keywords(papers, ["AI safety"])) == 1
+
+
+def test_filter_matches_keyword_in_abstract():
+    papers = [_make_paper("Language Models", "This paper studies alignment problems")]
+    assert len(filter_by_keywords(papers, ["alignment"])) == 1
+
+
+def test_filter_is_case_insensitive():
+    papers = [_make_paper("ALIGNMENT IN TRANSFORMERS", "no keywords here")]
+    assert len(filter_by_keywords(papers, ["alignment"])) == 1
+
+
+def test_filter_excludes_non_matching_papers():
+    papers = [_make_paper("Gradient Descent", "Optimization techniques")]
+    assert len(filter_by_keywords(papers, ["alignment", "AI safety"])) == 0
+
+
+def test_filter_partial_match_across_multiple_papers():
+    papers = [
+        _make_paper("AI Safety", "General topic"),
+        _make_paper("Gradient Methods", "Optimization"),
+    ]
+    assert len(filter_by_keywords(papers, ["AI safety"])) == 1
+
+
+def test_filter_returns_empty_list_for_empty_input():
+    assert filter_by_keywords([], ["alignment"]) == []
