@@ -26,6 +26,15 @@ TOP_K_RERANKED = 5                     # post-reranking
 
 # --- ArXiv ---
 ARXIV_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL", "cs.MA", "cs.CY"] # AI, ML, Computation & Language, Multiagent Systems, Computers & Society
+ARXIV_SAFETY_KEYWORDS = [
+    "alignment", "value alignment", "AI safety", "RLHF",
+    "reinforcement learning from human feedback", "constitutional AI",
+    "interpretability", "mechanistic interpretability", "explainability",
+    "red teaming", "jailbreak", "prompt injection", "adversarial",
+    "robustness", "reward hacking", "reward modeling",
+    "hallucination", "factuality", "harmlessness", "refusal",
+    "existential risk", "AI governance", "AI risk"
+]
 ARXIV_MONTHS_BACK = 12
 ARXIV_RATE_LIMIT_SLEEP = 3            # seconds between batches
 SECTIONS_TO_EXTRACT = ["abstract", "introduction", "results", "conclusion"]
