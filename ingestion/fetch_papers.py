@@ -1,7 +1,6 @@
 import config
 import arxiv
 import json
-import re
 import requests
 import sqlite3
 import time
@@ -65,8 +64,42 @@ def download_pdf(paper, pdfs_dir: Path) -> Path:
     return pdf_path
 
 
+def _parse_tei_sections(tei_xml: str, sections_to_extract: list[str]) -> dict[str, str]:
+    root = ET.fromstring(tei_xml)
+    ns = {"tei": "http://www.tei-c.org/ns/1.0"}
+    sections = {s: "" for s in sections_to_extract}
+
+    if "abstract" in sections_to_extract:
+        abstract_elem = root.find(".//tei:abstract", ns)
+        if abstract_elem is not None:
+            sections["abstract"] = " ".join(abstract_elem.itertext()).strip()
+
+    for div in root.findall(".//tei:body//tei:div", ns):
+        head = div.find("tei:head", ns)
+        if head is None:
+            continue
+        heading_lower = (head.text or "").lower()
+        for section in sections_to_extract:
+            if section == "abstract":
+                continue
+            if section.lower() in heading_lower and not sections[section]:
+                sections[section] = " ".join(
+                    p.text or "" for p in div.findall("tei:p", ns) if p.text
+                ).strip()
+
+    return sections
+
+
 def extract_sections(pdf_path: Path, sections_to_extract: list[str]) -> dict[str, str]:
-    raise NotImplementedError
+    with open(pdf_path, "rb") as f:
+        response = requests.post(
+            f"{config.GROBID_URL}/api/processFulltextDocument",
+            files={"input": f},
+            data={"consolidateHeader": "0"},
+            timeout=config.GROBID_TIMEOUT,
+        )
+    response.raise_for_status()
+    return _parse_tei_sections(response.text, sections_to_extract)
 
 
 def store_paper(

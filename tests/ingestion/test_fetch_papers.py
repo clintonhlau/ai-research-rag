@@ -165,3 +165,102 @@ def test_download_pdf_skips_if_file_already_exists(tmp_path):
 
     paper.download_pdf.assert_not_called()
     assert result == existing
+
+
+# ── extract_sections ─────────────────────────────────────────────────────────
+
+_SAMPLE_TEI_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader>
+    <fileDesc>
+      <abstract>
+        <p>This paper studies AI safety techniques for large language models.</p>
+      </abstract>
+    </fileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div>
+        <head>1 Introduction</head>
+        <p>Safety is a critical concern for modern AI systems.</p>
+      </div>
+      <div>
+        <head>3 Results</head>
+        <p>Our experiments demonstrate improved robustness on standard benchmarks.</p>
+      </div>
+      <div>
+        <head>4 Conclusion</head>
+        <p>We conclude that safety techniques significantly reduce harmful outputs.</p>
+      </div>
+    </body>
+  </text>
+</TEI>"""
+
+_MINIMAL_TEI_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0">
+  <teiHeader><fileDesc></fileDesc></teiHeader>
+  <text><body></body></text>
+</TEI>"""
+
+
+def _mock_grobid_response(tei_xml: str):
+    mock_response = MagicMock()
+    mock_response.text = tei_xml
+    mock_response.raise_for_status.return_value = None
+    return mock_response
+
+
+@patch("ingestion.fetch_papers.requests.post")
+def test_extract_sections_returns_all_requested_keys(mock_post, tmp_path):
+    mock_post.return_value = _mock_grobid_response(_SAMPLE_TEI_XML)
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.touch()
+
+    sections = extract_sections(pdf_path, ["abstract", "introduction", "results", "conclusion"])
+
+    assert set(sections.keys()) == {"abstract", "introduction", "results", "conclusion"}
+
+
+@patch("ingestion.fetch_papers.requests.post")
+def test_extract_abstract_from_tei_header(mock_post, tmp_path):
+    mock_post.return_value = _mock_grobid_response(_SAMPLE_TEI_XML)
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.touch()
+
+    sections = extract_sections(pdf_path, ["abstract"])
+
+    assert "AI safety" in sections["abstract"]
+
+
+@patch("ingestion.fetch_papers.requests.post")
+def test_extract_body_section_by_heading_substring_match(mock_post, tmp_path):
+    mock_post.return_value = _mock_grobid_response(_SAMPLE_TEI_XML)
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.touch()
+
+    sections = extract_sections(pdf_path, ["introduction"])
+
+    assert "critical" in sections["introduction"]
+
+
+@patch("ingestion.fetch_papers.requests.post")
+def test_extract_missing_section_returns_empty_string(mock_post, tmp_path):
+    mock_post.return_value = _mock_grobid_response(_MINIMAL_TEI_XML)
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.touch()
+
+    sections = extract_sections(pdf_path, ["abstract"])
+
+    assert sections["abstract"] == ""
+
+
+@patch("ingestion.fetch_papers.requests.post")
+def test_extract_sections_posts_to_correct_grobid_endpoint(mock_post, tmp_path):
+    mock_post.return_value = _mock_grobid_response(_SAMPLE_TEI_XML)
+    pdf_path = tmp_path / "paper.pdf"
+    pdf_path.touch()
+
+    extract_sections(pdf_path, ["abstract"])
+
+    call_url = mock_post.call_args.args[0]
+    assert "/api/processFulltextDocument" in call_url

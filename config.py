@@ -39,6 +39,10 @@ ARXIV_MONTHS_BACK = 12
 ARXIV_RATE_LIMIT_SLEEP = 3            # seconds between batches
 SECTIONS_TO_EXTRACT = ["abstract", "introduction", "results", "conclusion"]
 
+# --- GROBID ---
+GROBID_URL = "http://localhost:8070"
+GROBID_TIMEOUT = 60                   # seconds
+
 # --- Storage ---
 DB_PATH = "data/papers.db"
 CHROMA_PATH = "data/chroma_db"
