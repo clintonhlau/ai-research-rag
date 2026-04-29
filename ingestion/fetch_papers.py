@@ -44,14 +44,14 @@ def fetch_papers_by_category(category: str, months_back: int) -> list:
     client = arxiv.Client()
     search = arxiv.Search(
         query=f"cat:{category}",
-        max_results=float("inf"),
+        max_results=None,
         sort_by=arxiv.SortCriterion.SubmittedDate,
         sort_order=arxiv.SortOrder.Descending,
     )
     results = []
     for paper in client.results(search):
         if paper.published < cutoff:
-            break
+            break  # safe: results are sorted newest-first
         results.append(paper)
     return results
 
