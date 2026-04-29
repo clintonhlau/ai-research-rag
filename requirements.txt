@@ -1,0 +1,18 @@
+# LLM
+anthropic
+
+# Embeddings & reranking
+sentence-transformers
+
+# Vector store
+chromadb
+
+# Token counting
+tiktoken
+
+# Environment
+python-dotenv
+
+# Observability
+langfuse>=3.0.0
+opentelemetry-instrumentation-anthropic
