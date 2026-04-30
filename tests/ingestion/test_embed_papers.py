@@ -285,3 +285,15 @@ def test_run_embedding_calls_from_documents_with_all_docs(
 
     call_docs = mock_index.from_documents.call_args.args[0]
     assert doc1 in call_docs and doc2 in call_docs
+
+
+def test_run_embedding_is_decorated_with_observe():
+    assert hasattr(run_embedding, "__wrapped__"), (
+        "run_embedding must be decorated with @observe"
+    )
+
+
+def test_load_unembedded_papers_is_decorated_with_observe():
+    assert hasattr(load_unembedded_papers, "__wrapped__"), (
+        "load_unembedded_papers must be decorated with @observe"
+    )

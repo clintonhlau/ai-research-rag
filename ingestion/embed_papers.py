@@ -8,6 +8,7 @@ from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
+from tracing import observe
 
 
 def migrate_db(conn: sqlite3.Connection) -> None:
@@ -18,6 +19,7 @@ def migrate_db(conn: sqlite3.Connection) -> None:
         pass  # column already exists
 
 
+@observe(name="load_unembedded_papers")
 def load_unembedded_papers(conn: sqlite3.Connection) -> list[dict]:
     cursor = conn.execute(
         "SELECT paper_id, title, authors, categories, published_date, sections "
@@ -65,6 +67,7 @@ def mark_embedded(conn: sqlite3.Connection, paper_id: str) -> None:
     conn.commit()
 
 
+@observe(name="embed_papers")
 def run_embedding() -> None:
     conn = sqlite3.connect(config.DB_PATH)
     migrate_db(conn)
