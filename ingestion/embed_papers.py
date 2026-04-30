@@ -1,8 +1,13 @@
+import chromadb
 import config
 import json
 import sqlite3
 
-from llama_index.core import Document
+from datetime import datetime, timezone
+from llama_index.core import Document, StorageContext, VectorStoreIndex
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 
 def migrate_db(conn: sqlite3.Connection) -> None:
@@ -50,3 +55,49 @@ def build_documents(row: dict) -> list[Document]:
             )
         )
     return docs
+
+
+def mark_embedded(conn: sqlite3.Connection, paper_id: str) -> None:
+    conn.execute(
+        "UPDATE papers SET embedded_at = ? WHERE paper_id = ?",
+        (datetime.now(timezone.utc).isoformat(), paper_id),
+    )
+    conn.commit()
+
+
+def run_embedding() -> None:
+    conn = sqlite3.connect(config.DB_PATH)
+    migrate_db(conn)
+    rows = load_unembedded_papers(conn)
+    if not rows:
+        print("No new papers to embed.")
+        conn.close()
+        return
+
+    all_docs = []
+    for row in rows:
+        all_docs.extend(build_documents(row))
+
+    chroma_client = chromadb.PersistentClient(path=config.CHROMA_PATH)
+    chroma_collection = chroma_client.get_or_create_collection(config.CHROMA_COLLECTION)
+    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    embed_model = HuggingFaceEmbedding(model_name=config.EMBEDDING_MODEL)
+    splitter = SentenceSplitter(chunk_size=config.CHUNK_SIZE, chunk_overlap=config.CHUNK_OVERLAP)
+
+    VectorStoreIndex.from_documents(
+        all_docs,
+        storage_context=storage_context,
+        embed_model=embed_model,
+        transformations=[splitter],
+    )
+
+    for row in rows:
+        mark_embedded(conn, row["paper_id"])
+
+    conn.close()
+    print(f"Embedded {len(rows)} papers ({len(all_docs)} section documents).")
+
+
+if __name__ == "__main__":
+    run_embedding()

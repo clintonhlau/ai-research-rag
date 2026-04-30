@@ -168,3 +168,127 @@ def test_build_documents_whitespace_only_section_is_skipped():
     docs = build_documents(row)
     assert len(docs) == 1
     assert docs[0].metadata["section"] == "introduction"
+
+
+from datetime import datetime
+from unittest.mock import MagicMock, patch
+
+from ingestion.embed_papers import mark_embedded, run_embedding
+
+
+# mark_embedded
+
+def test_mark_embedded_sets_embedded_at(tmp_path):
+    conn = _make_db(tmp_path)
+    migrate_db(conn)
+    _insert_paper(conn)
+    mark_embedded(conn, "2301.00001v1")
+    row = conn.execute(
+        "SELECT embedded_at FROM papers WHERE paper_id = '2301.00001v1'"
+    ).fetchone()
+    assert row[0] is not None
+    conn.close()
+
+
+def test_mark_embedded_stores_iso_timestamp(tmp_path):
+    conn = _make_db(tmp_path)
+    migrate_db(conn)
+    _insert_paper(conn)
+    mark_embedded(conn, "2301.00001v1")
+    row = conn.execute(
+        "SELECT embedded_at FROM papers WHERE paper_id = '2301.00001v1'"
+    ).fetchone()
+    datetime.fromisoformat(row[0])  # must not raise
+    conn.close()
+
+
+# run_embedding
+
+@patch("ingestion.embed_papers.VectorStoreIndex")
+@patch("ingestion.embed_papers.ChromaVectorStore")
+@patch("ingestion.embed_papers.StorageContext")
+@patch("ingestion.embed_papers.HuggingFaceEmbedding")
+@patch("ingestion.embed_papers.SentenceSplitter")
+@patch("ingestion.embed_papers.chromadb")
+@patch("ingestion.embed_papers.sqlite3.connect")
+def test_run_embedding_skips_when_no_unembedded_papers(
+    mock_connect, mock_chromadb, mock_splitter,
+    mock_embed, mock_storage_ctx, mock_chroma_vs, mock_index,
+):
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+    mock_conn.execute.return_value.fetchall.return_value = []
+
+    run_embedding()
+
+    mock_index.from_documents.assert_not_called()
+
+
+@patch("ingestion.embed_papers.mark_embedded")
+@patch("ingestion.embed_papers.build_documents")
+@patch("ingestion.embed_papers.load_unembedded_papers")
+@patch("ingestion.embed_papers.migrate_db")
+@patch("ingestion.embed_papers.VectorStoreIndex")
+@patch("ingestion.embed_papers.ChromaVectorStore")
+@patch("ingestion.embed_papers.StorageContext")
+@patch("ingestion.embed_papers.HuggingFaceEmbedding")
+@patch("ingestion.embed_papers.SentenceSplitter")
+@patch("ingestion.embed_papers.chromadb")
+@patch("ingestion.embed_papers.sqlite3.connect")
+def test_run_embedding_marks_all_papers_embedded(
+    mock_connect, mock_chromadb, mock_splitter,
+    mock_embed, mock_storage_ctx, mock_chroma_vs, mock_index,
+    mock_migrate, mock_load, mock_build, mock_mark,
+):
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+    fake_row = {
+        "paper_id": "2301.00001v1",
+        "title": "AI Safety Paper",
+        "authors": "Alice Smith, Bob Jones",
+        "categories": "cs.AI, cs.LG",
+        "published_date": "2024-01-15T00:00:00+00:00",
+        "sections": {"abstract": "We study alignment.", "introduction": "Safety matters.", "results": "", "conclusion": "Done."},
+    }
+    mock_load.return_value = [fake_row]
+    mock_build.return_value = [MagicMock()]
+
+    run_embedding()
+
+    mock_mark.assert_called_once_with(mock_conn, "2301.00001v1")
+
+
+@patch("ingestion.embed_papers.mark_embedded")
+@patch("ingestion.embed_papers.build_documents")
+@patch("ingestion.embed_papers.load_unembedded_papers")
+@patch("ingestion.embed_papers.migrate_db")
+@patch("ingestion.embed_papers.VectorStoreIndex")
+@patch("ingestion.embed_papers.ChromaVectorStore")
+@patch("ingestion.embed_papers.StorageContext")
+@patch("ingestion.embed_papers.HuggingFaceEmbedding")
+@patch("ingestion.embed_papers.SentenceSplitter")
+@patch("ingestion.embed_papers.chromadb")
+@patch("ingestion.embed_papers.sqlite3.connect")
+def test_run_embedding_calls_from_documents_with_all_docs(
+    mock_connect, mock_chromadb, mock_splitter,
+    mock_embed, mock_storage_ctx, mock_chroma_vs, mock_index,
+    mock_migrate, mock_load, mock_build, mock_mark,
+):
+    mock_conn = MagicMock()
+    mock_connect.return_value = mock_conn
+    doc1, doc2 = MagicMock(), MagicMock()
+    fake_row = {
+        "paper_id": "2301.00001v1",
+        "title": "AI Safety Paper",
+        "authors": "Alice Smith, Bob Jones",
+        "categories": "cs.AI, cs.LG",
+        "published_date": "2024-01-15T00:00:00+00:00",
+        "sections": {"abstract": "We study alignment."},
+    }
+    mock_load.return_value = [fake_row]
+    mock_build.return_value = [doc1, doc2]
+
+    run_embedding()
+
+    call_docs = mock_index.from_documents.call_args.args[0]
+    assert doc1 in call_docs and doc2 in call_docs
