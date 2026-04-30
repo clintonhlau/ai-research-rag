@@ -205,22 +205,15 @@ def test_mark_embedded_stores_iso_timestamp(tmp_path):
 # run_embedding
 
 @patch("ingestion.embed_papers.VectorStoreIndex")
-@patch("ingestion.embed_papers.ChromaVectorStore")
-@patch("ingestion.embed_papers.StorageContext")
-@patch("ingestion.embed_papers.HuggingFaceEmbedding")
-@patch("ingestion.embed_papers.SentenceSplitter")
-@patch("ingestion.embed_papers.chromadb")
+@patch("ingestion.embed_papers.load_unembedded_papers")
+@patch("ingestion.embed_papers.migrate_db")
 @patch("ingestion.embed_papers.sqlite3.connect")
 def test_run_embedding_skips_when_no_unembedded_papers(
-    mock_connect, mock_chromadb, mock_splitter,
-    mock_embed, mock_storage_ctx, mock_chroma_vs, mock_index,
+    mock_connect, mock_migrate, mock_load, mock_index,
 ):
-    mock_conn = MagicMock()
-    mock_connect.return_value = mock_conn
-    mock_conn.execute.return_value.fetchall.return_value = []
-
+    mock_connect.return_value = MagicMock()
+    mock_load.return_value = []
     run_embedding()
-
     mock_index.from_documents.assert_not_called()
 
 
