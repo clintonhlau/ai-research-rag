@@ -39,6 +39,7 @@ ARXIV_MONTHS_BACK = 12
 ARXIV_RATE_LIMIT_SLEEP = 5            # seconds between ArXiv API page requests
 ARXIV_NUM_RETRIES = 5                 # retries per page on 429
 ARXIV_BACKOFF_BASE = 2                # exponential backoff multiplier on 429
+ARXIV_MAX_OFFSET = 9900               # ArXiv API returns HTTP 500 for start >= 10000
 SECTIONS_TO_EXTRACT = ["abstract", "introduction", "results", "conclusion"]
 
 # --- GROBID ---

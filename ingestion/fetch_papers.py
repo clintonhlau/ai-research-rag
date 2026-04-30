@@ -64,21 +64,39 @@ def _fetch_page_with_backoff(category: str, offset: int) -> list:
     return []  # unreachable
 
 
-def fetch_papers_by_category(category: str, months_back: int) -> list:
+def fetch_papers_by_category(
+    category: str, months_back: int, keywords: list[str] | None = None
+) -> list:
     cutoff = datetime.now(timezone.utc) - timedelta(days=months_back * 30)
     results = []
     offset = 0
+    page_num = 0
 
     while True:
+        if offset >= config.ARXIV_MAX_OFFSET:
+            break
         page = _fetch_page_with_backoff(category, offset)
         if not page:
             break
+
+        page_in_window = []
+        cutoff_reached = False
         for paper in page:
             if paper.published < cutoff:
-                return results  # sorted newest-first, so we're done
-            results.append(paper)
-        if len(page) < _PAGE_SIZE:
-            break  # last page
+                cutoff_reached = True
+                break
+            page_in_window.append(paper)
+
+        results.extend(page_in_window)
+
+        if keywords is not None:
+            matched = filter_by_keywords(page_in_window, keywords)
+            print(f"  Page {page_num + 1}: {len(page_in_window)} fetched, {len(matched)} matched keywords")
+
+        page_num += 1
+
+        if cutoff_reached or len(page) < _PAGE_SIZE:
+            break
         offset += _PAGE_SIZE
         time.sleep(config.ARXIV_RATE_LIMIT_SLEEP)
 
@@ -170,9 +188,9 @@ def run_ingestion() -> None:
 
     for category in config.ARXIV_CATEGORIES:
         print(f"Fetching {category}...")
-        papers = fetch_papers_by_category(category, config.ARXIV_MONTHS_BACK)
+        papers = fetch_papers_by_category(category, config.ARXIV_MONTHS_BACK, config.ARXIV_SAFETY_KEYWORDS)
         filtered = filter_by_keywords(papers, config.ARXIV_SAFETY_KEYWORDS)
-        print(f"  {len(papers)} fetched, {len(filtered)} matched keywords")
+        print(f"  Total: {len(papers)} fetched, {len(filtered)} matched keywords")
 
         for paper in filtered:
             try:
