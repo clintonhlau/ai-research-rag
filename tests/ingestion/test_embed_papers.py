@@ -106,3 +106,65 @@ def test_load_unembedded_returns_empty_when_no_papers(tmp_path):
     migrate_db(conn)
     assert load_unembedded_papers(conn) == []
     conn.close()
+
+
+# build_documents
+
+from ingestion.embed_papers import build_documents
+
+
+_SAMPLE_ROW = {
+    "paper_id": "2301.00001v1",
+    "title": "AI Safety Paper",
+    "authors": "Alice Smith, Bob Jones",
+    "categories": "cs.AI, cs.LG",
+    "published_date": "2024-01-15T00:00:00+00:00",
+    "sections": {
+        "abstract": "We study alignment.",
+        "introduction": "Safety matters.",
+        "results": "",
+        "conclusion": "We conclude success.",
+    },
+}
+
+
+def test_build_documents_skips_empty_sections():
+    docs = build_documents(_SAMPLE_ROW)
+    section_names = [d.metadata["section"] for d in docs]
+    assert "results" not in section_names
+
+
+def test_build_documents_returns_one_doc_per_nonempty_section():
+    docs = build_documents(_SAMPLE_ROW)
+    assert len(docs) == 3  # abstract, introduction, conclusion
+
+
+def test_build_documents_text_matches_section_content():
+    docs = build_documents(_SAMPLE_ROW)
+    abstract_doc = next(d for d in docs if d.metadata["section"] == "abstract")
+    assert abstract_doc.text == "We study alignment."
+
+
+def test_build_documents_metadata_contains_all_required_keys():
+    docs = build_documents(_SAMPLE_ROW)
+    required = {"arxiv_id", "title", "published_date", "section", "categories", "authors"}
+    for doc in docs:
+        assert required.issubset(doc.metadata.keys()), f"Missing keys in {doc.metadata}"
+
+
+def test_build_documents_arxiv_id_matches_paper_id():
+    docs = build_documents(_SAMPLE_ROW)
+    for doc in docs:
+        assert doc.metadata["arxiv_id"] == "2301.00001v1"
+
+
+def test_build_documents_returns_empty_list_when_all_sections_empty():
+    row = {**_SAMPLE_ROW, "sections": {"abstract": "", "introduction": "", "results": "", "conclusion": ""}}
+    assert build_documents(row) == []
+
+
+def test_build_documents_whitespace_only_section_is_skipped():
+    row = {**_SAMPLE_ROW, "sections": {"abstract": "   ", "introduction": "Real text."}}
+    docs = build_documents(row)
+    assert len(docs) == 1
+    assert docs[0].metadata["section"] == "introduction"

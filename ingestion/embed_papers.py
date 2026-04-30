@@ -3,6 +3,8 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
+from llama_index.core import Document
+
 
 def migrate_db(conn: sqlite3.Connection) -> None:
     try:
@@ -28,3 +30,24 @@ def load_unembedded_papers(conn: sqlite3.Connection) -> list[dict]:
             "sections": json.loads(sections_json),
         })
     return rows
+
+
+def build_documents(row: dict) -> list[Document]:
+    docs = []
+    for section_name, text in row["sections"].items():
+        if not text.strip():
+            continue
+        docs.append(
+            Document(
+                text=text,
+                metadata={
+                    "arxiv_id": row["paper_id"],
+                    "title": row["title"],
+                    "published_date": row["published_date"],
+                    "section": section_name,
+                    "categories": row["categories"],
+                    "authors": row["authors"],
+                },
+            )
+        )
+    return docs
