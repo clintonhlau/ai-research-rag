@@ -297,3 +297,9 @@ def test_load_unembedded_papers_is_decorated_with_observe():
     assert hasattr(load_unembedded_papers, "__wrapped__"), (
         "load_unembedded_papers must be decorated with @observe"
     )
+
+
+def test_build_documents_is_decorated_with_observe():
+    assert hasattr(build_documents, "__wrapped__"), (
+        "build_documents must be decorated with @observe"
+    )
